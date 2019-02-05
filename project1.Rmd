@@ -14,11 +14,28 @@ library(tidyr)
 library(scales)
 library(topicmodels)
 library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(data.table)
+
+
 ```
 
 ```{r}
 #hm_data<-read.csv("/Users/liweizhang/Columbia University/cu_semester2/Applied Data Science/project1/project/processed_moments2.csv")
-head(hm_data)
+
+hm_data<-read.csv("C:/Users/lz2655/Downloads/processed_moments_new.csv")
+#create age groups
+hm_data<-hm_data[!is.na(hm_data$age),]
+hm_data$revised_age<-as.numeric(hm_data$age)
+hm_data$revised_age<-ifelse(hm_data$revised_age=="prefer not to say",mean(hm_data$revised_age),hm_data$revised_age)
+
+age_breaks<-c(0,20,30,40,50,150)
+age_labels<-c("<20","20-30","30-40","40-50",">50")
+setDT(hm_data)[ , agegroups := cut(revised_age, 
+                                breaks = age_breaks, 
+                                right = FALSE, 
+                                labels = age_labels)]
 
 ```
 
@@ -224,30 +241,109 @@ wordcloud(words = df_word_gender$word, freq =df_word_gender$tf_idf, min.freq = 1
 
 #LDA
 ```{r}
-df_tm<-data.frame(df)
-gender_marital<-paste(as.character(df_tm$gender),as.character(df_tm$marital),sep=".")
-df_tm <-data.frame(cbind(df_tm,gender_marital))
+df_new<-data_frame(category=hm_data$predicted_category,text=as.character(hm_data$text))
+df_tm<-df_new %>%
+ unnest_tokens(word,text)
+df_tm
+
+
+```
+
+```{r LDA by gender}
+#manual_stopword<-c("friend","day","time","family")
+
+#df_tm <- df_tm %>% 
+#  filter(!(word %in% manual_stopword))
+#head(df_tm) 
+
+df_tm<-df_tm %>% 
+  count(category,word,sort = TRUE)
+
+df_tm<-df_tm%>%
+   cast_dtm(category,word,n)
+df_tm
+
+
+
+df_lda<-LDA(df_tm,k=15,control = list(seed=0))
+```
+
+
+
+```{r}
+df_topics<-tidy(df_lda,matrix("beta"))
+df_topics
+
+top_terms<-df_topics%>%
+  group_by(topic)%>%
+  top_n(5,beta)%>%
+  ungroup()%>%
+  arrange(topic,-beta)
+top_terms
+```
+
+
+
+
+
+
+
+
+```{r}
+df_2<-data_frame(wid=hm_data$wid,gender=hm_data$gender,marital=hm_data$marital,age=hm_data$agegroups,text=as.character(hm_data$text))
+df_2<-df_2 %>%
+ unnest_tokens(word,text)
+df_2
+
+
+```
+```{r}
+df_topics<-tidy(df_lda,matrix("beta"))
+df_topics
+
+top_terms<-df_topics%>%
+  group_by(topic)%>%
+  top_n(5,beta)%>%
+  ungroup()%>%
+  arrange(topic,-beta)
+top_terms
+```
+
+
+
+```{r}
+top_terms%>%
+  mutate(term=reorder(term,beta))%>%
+  ggplot(aes(term,beta,fill=factor(topic)))+
+  geom_col(show.legend = FALSE)+
+  facet_wrap(~topic, scales="free")+
+  coord_flip()
+```
+
+
+```{r}
+df_tm<-data.frame(df_2)
+gender_marital_age<-paste(as.character(df_tm$gender),as.character(df_tm$marital),as.character(df_tm$age),sep=".")
+df_tm <-data.frame(cbind(df_tm,gender_marital_age))
 head(df_tm)
 ```
 
 
 ```{r LDA by gender}
 manual_stopword<-c("friend","day","time","family")
-# df_tm<-subset(df_tm,word!=manual_stopword[1]|word!=manual_stopword[2]|word!=manual_stopword[3])
 
 df_tm <- df_tm %>% 
   filter(!(word %in% manual_stopword))
 head(df_tm) 
 
-
-
 df_tm<-df_tm %>% 
-  count(gender_marital,word,sort = TRUE)
+  count(gender_marital_age,word,sort = TRUE)
 
 df_tm<-df_tm%>%
-   cast_dtm(gender_marital,word,n)
+   cast_dtm(gender_marital_age,word,n)
+df_tm
 
-df_lda<-LDA(df_tm,k=15,control = list(seed=0))
+#df_lda<-LDA(df_tm,k=10,control = list(seed=0))
 ```
 
 

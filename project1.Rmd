@@ -4,7 +4,9 @@ author: "Liwei Zhang"
 date: "January 31, 2019"
 output: html_document
 ---
-```{r}
+
+
+```{r echo=FALSE, results='hide',message=FALSE}
 library(tidytext)
 library(dplyr)
 library(stringr)
@@ -14,15 +16,30 @@ library(tidyr)
 library(scales)
 library(topicmodels)
 library(tm)
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
+library(data.table)
 ```
 
-```{r}
+```{r echo=FALSE, results='hide',message=FALSE}
 #hm_data<-read.csv("/Users/liweizhang/Columbia University/cu_semester2/Applied Data Science/project1/project/processed_moments2.csv")
-head(hm_data)
 
+hm_data<-read.csv("C:/Users/lz2655/Downloads/processed_moments_new.csv")
+#create age groups
+hm_data<-hm_data[!is.na(hm_data$age),]
+hm_data$revised_age<-as.numeric(hm_data$age)
+hm_data$revised_age<-ifelse(hm_data$revised_age=="prefer not to say",mean(hm_data$revised_age),hm_data$revised_age)
+
+age_breaks<-c(0,20,30,40,50,150)
+age_labels<-c("<20","20-30","30-40","40-50",">50")
+setDT(hm_data)[ , agegroups := cut(revised_age, 
+                                breaks = age_breaks, 
+                                right = FALSE, 
+                                labels = age_labels)]
 ```
 
-```{r}
+```{r echo=FALSE, results='hide',message=FALSE}
 num_female<-nrow(subset(hm_data,gender=="f"))
 num_male<-nrow(subset(hm_data,gender=="m"))
 
@@ -31,17 +48,22 @@ num_single<-nrow(subset(hm_data,marital=="single"))
 ```
 
 
-```{r tokenize the sentences}
+```{r echo=FALSE, results='hide',message=FALSE,warning=FALSE}
+#tokenize the sentences
 order_wid<-order(hm_data$wid)#order hm_data by wid
 hm_data<-hm_data[order_wid,]
 
 df<-data_frame(wid=hm_data$wid,gender=hm_data$gender,marital=hm_data$marital,text=as.character(hm_data$text))
 df<-df %>%
  unnest_tokens(word,text)
-
 ```
 
-```{r show most common words}
+##Sentiment analysis
+
+###Things to cheer people up 
+To see generally what happens usually at people's happy monents, I use NRC Lexicons to find the most frequent sentiment words.
+```{r echo=FALSE, results='hide',message=FALSE}
+#show most common words
 sentiments_nrc<-get_sentiments("nrc")
 
 df_nrc<-df %>% 
@@ -55,15 +77,20 @@ ggplot(data_tmp)+
   geom_bar(stat="identity",aes(x=word,y=n,col="#F8766D"),fill="#F8766D")+
  # coord_flip()+
   labs(title = "Top 10 frequent sentiment words",y="Number",x="Words")+
-  theme(legend.position = 'none')
-
+  theme(legend.position = 'none')+
+  theme_bw()+
+  theme(
+    plot.background = element_blank()
+    ,panel.grid.major = element_blank()
+    ,panel.border = element_blank())
 #library(scales)
 # show_col(hue_pal()(4))
 # hue_pal()(4)
 #[1] "#F8766D" "#7CAE00" "#00BFC4" "#C77CFF"
 ```
 
-```{r get joy with nrc}
+```{r echo=FALSE, results='hide',message=FALSE}
+#get joy with nrc
 nrc_joy<-get_sentiments("nrc") %>%
   filter(sentiment=="joy")
 df_joy<-df %>% 
@@ -78,7 +105,8 @@ p_joy_married<-nrow(df_joy[df_joy$marital=="married",])/num_married
 p_joy_single<-nrow(df_joy[df_joy$marital=="single",])/num_single
 ```
 
-```{r get trust with nrc}
+```{r echo=FALSE, results='hide',message=FALSE}
+#r get trust with nrc
 nrc_trust<-get_sentiments("nrc") %>%
   filter(sentiment=="trust")
 df_trust<-df %>% 
@@ -92,7 +120,10 @@ p_trust_female<-nrow(df_trust[df_trust$gender=="f",])/num_female
 p_trust_married<-nrow(df_trust[df_trust$marital=="married",])/num_married
 p_trust_single<-nrow(df_trust[df_trust$marital=="single",])/num_single
 ```
-```{r get surprise with nrc}
+
+
+```{r echo=FALSE,results="hide", message=FALSE}
+#get surprise with nrc
 nrc_surprise<-get_sentiments("nrc") %>%
   filter(sentiment=="surprise")
 df_surprise<-df %>% 
@@ -106,39 +137,53 @@ p_surprise_female<-nrow(df_surprise[df_surprise$gender=="f",])/num_female
 p_surprise_married<-nrow(df_surprise[df_surprise$marital=="married",])/num_married
 p_surprise_single<-nrow(df_surprise[df_surprise$marital=="single",])/num_single
 ```
+###Sentiment comparison within groups
+I want to find whether there is a difference of sentiment expressions between female and male groups or married and single groups. To examine it, I first divide the data into female and male as well as married and single, respectively. After that, I compute the frequency of the use of sentiment words and scale the frequency by the total sentence number of each group. Here are two plots below that show the scaled frequency for each group.
 
-```{r compare the three sentiment within male and female}
+```{r echo=FALSE,message=FALSE}
+#r compare the three sentiment within male and female
 x_gender<-c("joy","trust","surprise","joy","trust","surprise","f","f","f","m","m","m",p_joy_female,p_trust_female,p_surprise_female,p_joy_male,p_trust_male,p_surprise_male)
 
 gender_sentiments<-data.frame(matrix(x_gender,nrow = 6,ncol = 3))
-colnames(gender_sentiments)<-c("sentiments","gender","percentage")#create new dataframs to plot
+colnames(gender_sentiments)<-c("sentiments","gender","scaled_frequency")#create new dataframs to plot
 
-ggplot(gender_sentiments,aes(sentiments,percentage,fill=gender))+
-  geom_bar(stat="identity",position="dodge")
+ggplot(gender_sentiments,aes(sentiments,scaled_frequency,fill=gender))+
+  geom_bar(stat="identity",position="dodge")+
+  theme_bw()+
+  labs(title="Useage of sentiment words over gender", y="scaled frequency")+
+  theme(
+    plot.background = element_blank()
+    ,panel.grid.major = element_blank()
+    ,panel.border = element_blank())
 ```
 
-
-```{r compare the three sentiment within married people and single ones}
+```{r echo=FALSE,message=FALSE}
+#compare the three sentiment within married people and single ones
 x_marital<-c("joy","trust","surprise","joy","trust","surprise","married","married","married","single","single","single",p_joy_married,p_trust_married,p_surprise_married,p_joy_single,p_trust_single,p_surprise_single)
 
 marital_sentiments<-data.frame(matrix(x_marital,nrow = 6,ncol = 3))
-colnames(marital_sentiments)<-c("sentiments","marital","percentage")#create new dataframs to plot
+colnames(marital_sentiments)<-c("sentiments","marital","scaled_frequency")#create new dataframs to plot
 
-ggplot(marital_sentiments,aes(sentiments,percentage,fill=marital))+
-  geom_bar(stat="identity",position="dodge")
+ggplot(marital_sentiments,aes(sentiments,scaled_frequency,fill=marital))+
+  geom_bar(stat="identity",position="dodge")+
+  theme_bw()+
+  labs(title="Useage of sentiment words over marital", y="scaled frequency")+
+  theme(
+    plot.background = element_blank()
+    ,panel.grid.major = element_blank()
+    ,panel.border = element_blank())
 ```
-#Comments:
-#For both plots above, we scale the num of sentiments by the num of sentences for each group(a.k.a.,female and male, married and single)
+ 
+* Compared to male group, female group shows stronger sentiments by having higher scaled frequency of using sentiment words. 
 
-# Compared to male group, female group show stronger sentiments by having higher scale percentage of using sentiment words. 
+* Compared to single group, married group shows stronger sentiments by having higher scaled frequency of using sentiment words. 
 
-# Compared to single group, married group show stronger sentiments by having higher scale percentage of using sentiment words. 
-
-#For all groups, they enjoyed the moment of joy the most, then that of trust and then that of surprise.
+* For all groups, they enjoyed the moment of joy the most, then that of trust and then that of surprise.
 
 
-#tf-idf
-```{r get the word frequency by gender}
+##tf-idf
+```{r echo=FALSE,results="hide",message=FALSE}
+#get the word frequency by gender
 df_word_gender<-df %>% 
   count(gender,word,sort = TRUE)
 
@@ -155,6 +200,12 @@ freq_by_rank_gender<-df_word_gender%>%
 df_word_gender<-df_word_gender%>%
   bind_tf_idf(word,gender,n)
 
+df_word_gender
+```
+
+
+
+```{r echo=FALSE,results="hide",message=FALSE}
 df_word_gender<-df_word_gender%>%
   select(-total)%>%
   arrange(desc(tf_idf))
@@ -162,7 +213,7 @@ df_word_gender<-df_word_gender%>%
 df_word_gender
 ```
 
-```{r}
+```{r echo=FALSE, message=FALSE}
 df_word_gender%>%
   arrange(word=factor(word,levels=rev(unique(word))))%>%
   group_by(gender)%>%
@@ -176,7 +227,10 @@ df_word_gender%>%
 ```
 
 
-```{r get the word frequency by marital situation}
+
+
+```{r echo=FALSE,results="hide",message=FALSE}
+#get the word frequency by marital situation
 df_word_marital<-df %>% 
   count(marital,word,sort = TRUE)
 
@@ -200,7 +254,7 @@ df_word_marital<-df_word_marital%>%
 df_word_marital
 ```
 
-```{r}
+```{r echo=FALSE, message=FALSE}
 df_word_marital%>%
   arrange(word=factor(word,levels=rev(unique(word))))%>%
   group_by(marital)%>%
@@ -212,156 +266,210 @@ df_word_marital%>%
   facet_wrap(~marital,ncol=2,scales = "free")+
   coord_flip()
 ```
-```{r}
-library(wordcloud)
-library(RColorBrewer)
+Under tf-idf method, what married people enjoy is as followed.
+
+* Family trips 
+There are six top words about tourist attractions and amusement parks. They include Wonderla(amusement park), Wayanad, Tioman, Ariyaman(tourist attractions), Munnar,Thekkady(national park),etc)
+
+* Family life
+There are words such as grandkids and father-in-law.
+
+* Real estate purchases
+ex. bhk(one bedroom, one hall and one kitchen apartment)
+
+
+Under tf-idf method, what single people enjoy is as followed.
+* Single life(Tinder, Coachella )
+* Fraternities and sororities(fraternities and Manga)
+* Nature(mth=>warth, rain dew)
+* Work(fininsh online module)
+* Exercise and weightlift(deadlift)
+* food (boba)
+
+
+* Married ones focus more on enjoying family time and settleing down in life.
+* Single ones focus more on personal life in both self-entertainment and personal development. 
+
+
+
+
+
+#gender
+```{r,echo=FALSE, message=FALSE,warning = FALSE}
 set.seed(0)
-wordcloud(words = df_word_gender$word, freq =df_word_gender$tf_idf, min.freq = 1,
+demoFreq_f<-data.frame(words = df_word_gender[df_word_gender$gender=="f",]$word, freq =df_word_gender[df_word_gender$gender=="f",]$tf_idf)
+wordcloud2(demoFreq_f)
+```
+
+```{r,echo=FALSE, message=FALSE,warning = FALSE}
+set.seed(0)
+demoFreq_m<-data.frame(words = df_word_gender[df_word_gender$gender=="m",]$word, freq =df_word_gender[df_word_gender$gender=="m",]$tf_idf)
+wordcloud2(demoFreq_m)
+```
+
+```{r,echo=FALSE, message=FALSE,warning = FALSE}
+# wordcloud by marital
+demoFreq_s<-data.frame(words = df_word_marital[df_word_marital$marital=="single",]$word, freq =df_word_marital[df_word_marital$marital=="single",]$tf_idf)
+wordcloud2(demoFreq_s)
+```
+
+
+
+```{r,echo=FALSE, message=FALSE,warning = FALSE}
+demoFreq_ma<-data.frame(words = df_word_marital[df_word_marital$marital=="married",]$word, freq =df_word_marital[df_word_marital$marital=="married",]$tf_idf)
+wordcloud2(demoFreq_ma)
+```
+
+```{r,echo=FALSE, message=FALSE,warning = FALSE}
+wordcloud(words = df_word_marital[df_word_marital$marital=="single",]$word, freq =df_word_marital[df_word_marital$marital=="single",]$tf_idf, min.freq = 1,
           max.words=200, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(8, "Dark2"))
 
+wordcloud(words = df_word_marital[df_word_marital$marital=="married",]$word, freq =df_word_marital[df_word_marital$marital=="married",]$tf_idf, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
 ```
 
 #LDA
 ```{r}
-df_tm<-data.frame(df)
-gender_marital<-paste(as.character(df_tm$gender),as.character(df_tm$marital),sep=".")
-df_tm <-data.frame(cbind(df_tm,gender_marital))
-head(df_tm)
+#df_new<-data_frame(category=hm_data$predicted_category,marital=h_text=as.character(hm_data$text))
+#df_tm<-df_new %>%
+# unnest_tokens(word,text)
+#df_tm
+
+```
+
+```{r}
+#manual_stopword<-c("day","time")
+
+#df_tm <- df_tm %>% 
+#  filter(!(word %in% manual_stopword))
+#head(df_tm) 
+
+#df_tm<-df_tm %>% 
+#  count(category,word,sort = TRUE)
+
+#df_tm<-df_tm%>%
+#   cast_dtm(category,word,n)
+#df_tm
+
+
+#df_lda<-LDA(df_tm,k=15,control = list(seed=0))
+#df_lda
+```
+
+
+
+```{r}
+#df_topics<-tidy(df_lda,matrix= "beta")
+#df_topics
+
+#top_terms<-df_topics%>%
+#  group_by(topic)%>%
+#  top_n(5,beta)%>%
+#  ungroup()%>%
+#  arrange(topic,-beta)
+#top_terms
+```
+
+
+
+
+
+
+
+
+```{r}
+#df_2<-data_frame(wid=hm_data$wid,gender=hm_data$gender,marital=hm_data$marital,age=hm_data$agegroups,text=as.character(hm_data$text))
+#df_2<-df_2 %>%
+ #unnest_tokens(word,text)
+#df_2
+```
+
+
+
+```{r}
+#df_topics<-tidy(df_lda,matrix("beta"))
+#df_topics
+
+#top_terms<-df_topics%>%
+#  group_by(topic)%>%
+ # top_n(5,beta)%>%
+ # ungroup()%>%
+ # arrange(topic,-beta)
+#top_terms
+```
+
+
+
+```{r}
+#top_terms%>%
+#  mutate(term=reorder(term,beta))%>%
+ # ggplot(aes(term,beta,fill=factor(topic)))+
+#  geom_col(show.legend = FALSE)+
+#  facet_wrap(~topic, scales="free")+
+#  coord_flip()
+```
+
+
+```{r}
+#df_tm<-data.frame(df_2)
+#gender_marital_age<-paste(as.character(df_tm$gender),as.character(df_tm$marital),as.character(df_tm$age),sep=".")
+#df_tm <-data.frame(cbind(df_tm,gender_marital_age))
+#head(df_tm)
 ```
 
 
 ```{r LDA by gender}
-manual_stopword<-c("friend","day","time","family")
-# df_tm<-subset(df_tm,word!=manual_stopword[1]|word!=manual_stopword[2]|word!=manual_stopword[3])
+#manual_stopword<-c("friend","day","time","family")
 
-df_tm <- df_tm %>% 
-  filter(!(word %in% manual_stopword))
-head(df_tm) 
+#df_tm <- df_tm %>% 
+#  filter(!(word %in% manual_stopword))
+#head(df_tm) 
 
+#df_tm<-df_tm %>% 
+#  count(gender_marital_age,word,sort = TRUE)
 
+#df_tm<-df_tm%>%
+#   cast_dtm(gender_marital_age,word,n)
+#df_tm
 
-df_tm<-df_tm %>% 
-  count(gender_marital,word,sort = TRUE)
-
-df_tm<-df_tm%>%
-   cast_dtm(gender_marital,word,n)
-
-df_lda<-LDA(df_tm,k=15,control = list(seed=0))
+##df_lda<-LDA(df_tm,k=10,control = list(seed=0))
 ```
 
 
 ```{r}
-df_topics<-tidy(df_lda,matrix("beta"))
-df_topics
+#df_topics<-tidy(df_lda,matrix("beta"))
+#df_topics
 
-top_terms<-df_topics%>%
-  group_by(topic)%>%
-  top_n(5,beta)%>%
-  ungroup()%>%
-  arrange(topic,-beta)
-top_terms
+#top_terms<-df_topics%>%
+#  group_by(topic)%>%
+#  top_n(5,beta)%>%
+#  ungroup()%>%
+#  arrange(topic,-beta)
+#top_terms
 ```
 
 
 ```{r}
-top_terms%>%
-  mutate(term=reorder(term,beta))%>%
-  ggplot(aes(term,beta,fill=factor(topic)))+
-  geom_col(show.legend = FALSE)+
-  facet_wrap(~topic, scales="free")+
-  coord_flip()
+#top_terms%>%
+#  mutate(term=reorder(term,beta))%>%
+#  ggplot(aes(term,beta,fill=factor(topic)))+
+#  geom_col(show.legend = FALSE)+
+#  facet_wrap(~topic, scales="free")+
+#  coord_flip()
 ```
-```{r}
-
-
-
-```
-
-```{r}
-n_topics <-c(2, 4, 10, 20, 50, 100)
-ap_lda_compare <- n_topics %>%
-  map(LDA, x = df_word_marital, control =list(seed = 1109))
-
-geom_point() +
-  y = "Perplexity")
-
-```
-
-
 
 
 ```{r}
+#n_topics <-c(2, 4, 10, 20, 50, 100)
+#ap_lda_compare <- n_topics %>%
+#  map(LDA, x = df_word_marital, control =list(seed = 1109))
 
-
-
-```
-
-
-
-
-```{r}
-
-
+#geom_point() +
+#  y = "Perplexity")
 
 ```
-
-
-
-
-```{r}
-
-
-
-```
-
-
-
-
-```{r}
-
-
-
-```
-
-
-
-```{r}
-
-
-
-```
-
-
-
-
-```{r}
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

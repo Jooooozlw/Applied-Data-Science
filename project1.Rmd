@@ -4,7 +4,7 @@ author: "Liwei Zhang"
 date: "January 31, 2019"
 output: html_document
 ---
-![Caption for the picture.](C:/Users/lz2655/Downloads/happy.jpg)
+![Caption for the picture.](https://raw.githubusercontent.com/Jooooozlw/Applied-Data-Science/happyjpg/happy.jpg)
 
 
 ```{r echo=FALSE, results='hide',message=FALSE}
@@ -35,13 +35,8 @@ library(purrr)
 ```
 
 ```{r echo=FALSE, results='hide',message=FALSE}
-#hm_data<-read.csv("/Users/liweizhang/Columbia University/cu_semester2/Applied Data #Science/project1/project/processed_moments2.csv")
-
-hm_data<-read.csv("C:/Users/lz2655/Downloads/processed_moments_new.csv")
-
-
-#urlfile<-'https://github.com/Jooooozlw/Applied-Data-Science/blob/master/processed_moments_new.csv'
-#hm_data <- read.csv(urlfile)
+urlfile<-'https://raw.githubusercontent.com/Jooooozlw/Applied-Data-Science/master/processed_moments_new.csv'
+h <- read.csv(urlfile)
 ```
 
 ```{r echo=FALSE, results='hide',message=FALSE}
